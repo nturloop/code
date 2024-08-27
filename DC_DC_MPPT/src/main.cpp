@@ -160,14 +160,17 @@ void callback(char* topic, byte* message, unsigned int length) {
  if (String(topic) == String(DutyCycleCTRTopic)) {
     dutyCycle = constrain(String(messageTemp).toInt(),0,250);
     Serial.println("DutyCyle controle a : "+messageTemp);}
+
   if ((String(topic) == String(OCPINTopic))){
-    
-  }
-  {
-    /* code */
-  }
+    Serial.println("OCPIN toggle");
+    digitalWrite(OCPIN, !digitalRead(OCPIN));}
   
+  if ((String(topic) == String(BackFlowTopic))){
+    Serial.println("backflowPIN toggle");
+    digitalWrite(backFlowPIN, !digitalRead(backFlowPIN));}
     
+  
+  
   
 }
 
@@ -259,11 +262,8 @@ courantOUT = (CourantOUTMAP-1.6)/0.185;
     temp.trim();
 		Serial.println(temp);
     if(temp.equals("OCPIN")){
-      Serial.println("OCPIN toggle");
-      digitalWrite(OCPIN, !digitalRead(OCPIN));}
-    if(temp.equals("backflow")){
-      Serial.println("backflowPIN toggle");
-      digitalWrite(backFlowPIN, !digitalRead(backFlowPIN));}
+      
+    
     if(temp.equals("PinSub")){
       Serial.println("PinSub toggle");
       digitalWrite(PinSub, !digitalRead(PinSub));}
