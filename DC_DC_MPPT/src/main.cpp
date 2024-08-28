@@ -17,10 +17,11 @@ const char *TensionOUTtopic = "ESP32/MPPT/TensionOUT";
 const char *DutyCycleVAlueTopic = "ESP32/MPPT/DutyCyleValue";
 //subscribe
 const char *DutyCycleCTRTopic = "ESP32/MPPT/DutyCyleCTR";
-const char *OCPINTopic = "ESP32/MPPT/OCPINT";
+const char *OCPINTopic = "ESP32/MPPT/OCPINT_State";
 const char *BackFlowTopic ="ESP32/MPPT/BackFlow";
 const char *PinSubTopic = "ESP32/MPPT/PinSub";
 const char *CCProtTopic = "ESP32/MPPT/CCProt";
+const char *IR2184Topic = "ESP32/MPPT/IR2184";
 
 const char *mqtt_username = ""; 
 const char *mqtt_password = ""; 
@@ -52,12 +53,12 @@ float dutyCycle = 50;
 /// Assignation Pin analogique
 const int TensionINPIN = 0;
 const int CourantINPIN = 2;
-const int potPin = 4;
+//const int potPin = 4;
 const int TensionOUTPIN = 1;
 const int CourantOutPin = 3;
 
 ///VAriable analogique
-int potValue = 0;
+//int potValue = 0;
 float TensionIN = 0;
 float TensionOut = 0;
 
@@ -74,6 +75,9 @@ int CourantINTAB[numlecture];
 int lectureIndex = 0;          // the index of the current reading
 int TotalTension = 0;              // the running total
 int moyTension = 0; 
+
+unsigned long previousMillis = 0;
+unsigned long interval = 1500;
 
 ///initiation WIFI
 void initWifi()
@@ -114,12 +118,29 @@ void initMQTT()
 
   void PublishMQTT()
   {
+    if(!client.connected()){
+      String client_id = "esp32-client-"; 
+    client_id += String(WiFi.macAddress()); 
+    Serial.printf("The client %s connects to the public MQTT brokern", client_id.c_str()); 
+    if (client.connect(client_id.c_str(), mqtt_username, mqtt_password)) { 
+        client.subscribe(DutyCycleCTRTopic);
+        client.subscribe(PinSubTopic);
+        client.subscribe(OCPINTopic);
+        client.subscribe(BackFlowTopic);
+        client.subscribe(CCProtTopic);
+        Serial.println("Public EMQX MQTT broker connected"); 
+    } else { 
+            Serial.print("failed with state "); 
+            Serial.print(client.state()); 
+            delay(2000); 
+        } 
+    }
  // Publish et subscribe 
   client.publish(CourantINtopic, String(CourantIn).c_str()); 
-   client.publish(CourantOUTtopic, String(courantOUT).c_str());
-    client.publish(TensionINtopic, String(TensionIN).c_str());
-     client.publish(TensionOUTtopic, String(TensionOut).c_str());
-      client.publish(DutyCycleVAlueTopic, String(dutyCycle).c_str());
+  client.publish(CourantOUTtopic, String(courantOUT).c_str());
+  client.publish(TensionINtopic, String(TensionIN).c_str());
+  client.publish(TensionOUTtopic, String(TensionOut).c_str());
+  client.publish(DutyCycleVAlueTopic, String(dutyCycle).c_str());
       
   }
 
@@ -162,15 +183,30 @@ void callback(char* topic, byte* message, unsigned int length) {
     Serial.println("DutyCyle controle a : "+messageTemp);}
 
   if ((String(topic) == String(OCPINTopic))){
+    if(String(messageTemp).toInt() != digitalRead(OCPIN)){
     Serial.println("OCPIN toggle");
-    digitalWrite(OCPIN, !digitalRead(OCPIN));}
+    digitalWrite(OCPIN, !digitalRead(OCPIN));}}
   
   if ((String(topic) == String(BackFlowTopic))){
+    if(String(messageTemp).toInt() != digitalRead(backFlowPIN)){
     Serial.println("backflowPIN toggle");
-    digitalWrite(backFlowPIN, !digitalRead(backFlowPIN));}
-    
+    digitalWrite(backFlowPIN, !digitalRead(backFlowPIN));}}
+
+  if ((String(topic) == String(PinSubTopic))){
+    if(String(messageTemp).toInt() != digitalRead(PinSub)){
+      Serial.println("PinSub toggle");
+      digitalWrite(PinSub, !digitalRead(PinSub));}}
   
-  
+  if ((String(topic) == String(CCProtTopic))){
+    if(String(messageTemp).toInt() != digitalRead(CCProtPin)){
+      Serial.println("CCProtPin toggle");
+      digitalWrite(CCProtPin, !digitalRead(CCProtPin));}}
+
+      
+  if ((String(topic) == String(CCProtTopic))){
+    if(String(messageTemp).toInt() != digitalRead(PINSD)){
+      Serial.println("IR2184 shutdown toggle");
+      digitalWrite(PINSD, !digitalRead(PINSD));}}
   
 }
 
@@ -209,7 +245,7 @@ adc.begin();
   } 
 
 void loop() { 
-
+  //Serial.println(ESP.getFreeHeap());
   client.loop(); 
 //Lecture TEnsion d'entrée
   int TensionRAW = adc.readADC(TensionINPIN);
@@ -237,8 +273,8 @@ courantOUT = (CourantOUTMAP-1.6)/0.185;
 
 
 
-  potValue = adc.readADC(potPin);
-  dutyCycle = mapfloat(potValue,0,1023,0,250);
+  //potValue = adc.readADC(potPin);
+  //dutyCycle = mapfloat(potValue,0,1023,0,250);
 
   ledcWrite(PWMPIN, dutyCycle);
 
@@ -249,33 +285,32 @@ courantOUT = (CourantOUTMAP-1.6)/0.185;
 
  
  Serial.print("rapport : ");Serial.println(dutyCycle);
-  Serial.print("TensionEntrée : "); Serial.println(TensionIN);
+  Serial.print("TensionEntree : "); Serial.println(TensionIN);
   Serial.print("TensionSortie : "); Serial.println(TensionOut);
-  Serial.print("CourantEntrée : "); Serial.println(CourantIn);
+  Serial.print("CourantEntree : "); Serial.println(CourantIn);
   Serial.print("COURANT SORTIE  : "); Serial.println(courantOUT);
   
   
+  PublishMQTT();
+
   delay(500);
   
-	if (Serial.available()) {
-		String temp = Serial.readString();
-    temp.trim();
-		Serial.println(temp);
-    if(temp.equals("OCPIN")){
+	//if (Serial.available()) {
+	//	String temp = Serial.readString();
+   // temp.trim();
+		//Serial.println(temp);
+    //if(temp.equals("OCPIN")){
       
+    unsigned long currentMillis = millis();
+  // if WiFi is down, try reconnecting every CHECK_WIFI_TIME seconds
+  if ((WiFi.status() != WL_CONNECTED) && (currentMillis - previousMillis >=interval)) {
+    Serial.print(millis());
+    Serial.println("Reconnecting to WiFi...");
+    WiFi.disconnect();
+    WiFi.reconnect();
+    previousMillis = currentMillis;
+  }
     
-    if(temp.equals("PinSub")){
-      Serial.println("PinSub toggle");
-      digitalWrite(PinSub, !digitalRead(PinSub));}
-    if(temp.equals("CCProtPin")){
-      Serial.println("CCProtPin toggle");
-      digitalWrite(CCProtPin, !digitalRead(CCProtPin));}
-    if(temp.equals("IR2184")){
-      Serial.println("IR2184 shutdown toggle");
-      digitalWrite(PINSD, !digitalRead(PINSD));}
-      
-	}
-    PublishMQTT();
   } 
 
  
