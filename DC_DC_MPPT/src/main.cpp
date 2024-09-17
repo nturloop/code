@@ -3,12 +3,14 @@
 #include  "Wire.h"
 #include <Adafruit_MCP3008.h>
 
+
 /// WiFi 
 const char *ssid = "Volta ouh"; // Entrez votre SSID WiFi  
 const char *password = "Allo1111"; // Entrez votre mot de passe WiFi 
   
 /// MQTT Broker 
 const char *mqtt_broker = "192.168.0.145"; 
+//const char *mqtt_broker ="mqtt.thingspeak.com"
 //publish
 const char *CourantINtopic = "ESP32/MPPT/CourantIN";
 const char *CourantOUTtopic = "ESP32/MPPT/CourantOUT";
@@ -23,8 +25,8 @@ const char *PinSubTopic = "ESP32/MPPT/PinSub";
 const char *CCProtTopic = "ESP32/MPPT/CCProt";
 const char *IR2184Topic = "ESP32/MPPT/IR2184";
 
-const char *mqtt_username = ""; 
-const char *mqtt_password = ""; 
+const char *mqtt_username = "AigDHBQpDzYqLgItKQYvFjo"; 
+const char *mqtt_password = "C5UA2b7l+JudOXg9RkCAJau1"; 
 const int mqtt_port = 1883; 
 
 /// varible server et MQTT
@@ -119,29 +121,21 @@ void initMQTT()
   void PublishMQTT()
   {
     if(!client.connected()){
+      client.disconnect();
       String client_id = "esp32-client-"; 
-    client_id += String(WiFi.macAddress()); 
-    Serial.printf("The client %s connects to the public MQTT brokern", client_id.c_str()); 
-    if (client.connect(client_id.c_str(), mqtt_username, mqtt_password)) { 
-        client.subscribe(DutyCycleCTRTopic);
-        client.subscribe(PinSubTopic);
-        client.subscribe(OCPINTopic);
-        client.subscribe(BackFlowTopic);
-        client.subscribe(CCProtTopic);
+      client_id += String(WiFi.macAddress()); 
+      Serial.printf("The client %s connects to the public MQTT brokern", client_id.c_str()); 
+      client.connect(client_id.c_str(), mqtt_username, mqtt_password);
         Serial.println("Public EMQX MQTT broker connected"); 
-    } else { 
-            Serial.print("failed with state "); 
-            Serial.print(client.state()); 
-            delay(2000); 
         } 
-    }
+    
  // Publish et subscribe 
   client.publish(CourantINtopic, String(CourantIn).c_str()); 
   client.publish(CourantOUTtopic, String(courantOUT).c_str());
   client.publish(TensionINtopic, String(TensionIN).c_str());
   client.publish(TensionOUTtopic, String(TensionOut).c_str());
   client.publish(DutyCycleVAlueTopic, String(dutyCycle).c_str());
-      
+      Serial.println("publish");
   }
 
  
@@ -212,7 +206,7 @@ void callback(char* topic, byte* message, unsigned int length) {
 
 void setup() { 
  //Mise de la vitesse de transmission à 115200; 
-    Serial.begin(115200); 
+    Serial.begin(9600); 
  // Connecting to a Wi-Fi network 
     initWifi();
 
@@ -238,7 +232,7 @@ void setup() {
 
 
 adc.begin();
-
+  Serial.println("Setup du esp32");
   delay(1000);
 
   
