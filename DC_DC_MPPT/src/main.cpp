@@ -2,6 +2,7 @@
 #include "PubSubClient.h"
 #include  "Wire.h"
 #include <Adafruit_MCP3008.h>
+#include <ArduinoJson.h>
 
 
 /// WiFi 
@@ -12,18 +13,21 @@ const char *password = "Allo1111"; // Entrez votre mot de passe WiFi
 const char *mqtt_broker = "192.168.0.145"; 
 //const char *mqtt_broker ="mqtt.thingspeak.com"
 //publish
+StaticJsonDocument<300> JSONData;
 const char *CourantINtopic = "ESP32/MPPT/CourantIN";
 const char *CourantOUTtopic = "ESP32/MPPT/CourantOUT";
 const char *TensionINtopic = "ESP32/MPPT/TensionIN";
 const char *TensionOUTtopic = "ESP32/MPPT/TensionOUT";
 const char *DutyCycleVAlueTopic = "ESP32/MPPT/DutyCyleValue";
+
 //subscribe
-const char *DutyCycleCTRTopic = "ESP32/MPPT/DutyCyleCTR";
-const char *OCPINTopic = "ESP32/MPPT/OCPINT_State";
-const char *BackFlowTopic ="ESP32/MPPT/BackFlow";
-const char *PinSubTopic = "ESP32/MPPT/PinSub";
-const char *CCProtTopic = "ESP32/MPPT/CCProt";
-const char *IR2184Topic = "ESP32/MPPT/IR2184";
+//const char *DutyCycleCTRTopic = "ESP32/MPPT/DutyCyleCTR";
+//const char *OCPINTopic = "ESP32/MPPT/OCPINT_State";
+//const char *BackFlowTopic ="ESP32/MPPT/BackFlow";
+//const char *PinSubTopic = "ESP32/MPPT/PinSub";
+//const char *CCProtTopic = "ESP32/MPPT/CCProt";
+//const char *IR2184Topic = "ESP32/MPPT/IR2184";
+const char *JSONDATACTRTopic = "ESP32/MPPT/JSONDATACTR";
 
 const char *mqtt_username = "AigDHBQpDzYqLgItKQYvFjo"; 
 const char *mqtt_password = "C5UA2b7l+JudOXg9RkCAJau1"; 
@@ -102,11 +106,12 @@ void initMQTT()
     client_id += String(WiFi.macAddress()); 
     Serial.printf("The client %s connects to the public MQTT brokern", client_id.c_str()); 
     if (client.connect(client_id.c_str(), mqtt_username, mqtt_password)) { 
-        client.subscribe(DutyCycleCTRTopic);
-        client.subscribe(PinSubTopic);
-        client.subscribe(OCPINTopic);
-        client.subscribe(BackFlowTopic);
-        client.subscribe(CCProtTopic);
+        //client.subscribe(DutyCycleCTRTopic);
+        //client.subscribe(PinSubTopic);
+        //client.subscribe(OCPINTopic);
+        //client.subscribe(BackFlowTopic);
+        //client.subscribe(CCProtTopic);
+        client.subscribe(JSONDATACTRTopic);
         Serial.println("Public EMQX MQTT broker connected"); 
     } else { 
             Serial.print("failed with state "); 
@@ -120,6 +125,8 @@ void initMQTT()
 
   void PublishMQTT()
   {
+    
+
     if(!client.connected()){
       client.disconnect();
       String client_id = "esp32-client-"; 
@@ -129,6 +136,17 @@ void initMQTT()
         Serial.println("Public EMQX MQTT broker connected"); 
         } 
     
+  
+  JSONData["CourantIN"] = CourantIn;
+  JSONData["CoruantOUT"] = courantOUT;
+  JSONData["TensionIN"] = String(TensionIN,2);
+  JSONData["TensionOut"] = String(TensionOut,2);
+  JSONData["dutyCycle"] = dutyCycle;
+  
+  char out[128];
+  int b = serializeJson(JSONData,out);
+  boolean dataout= client.publish("ESP32/MPPT/DATAJSON", out);
+
  // Publish et subscribe 
   client.publish(CourantINtopic, String(CourantIn).c_str()); 
   client.publish(CourantOUTtopic, String(courantOUT).c_str());
@@ -172,41 +190,73 @@ void callback(char* topic, byte* message, unsigned int length) {
     messageTemp += (char)message[i];
   }
 
- if (String(topic) == String(DutyCycleCTRTopic)) {
-    dutyCycle = constrain(String(messageTemp).toInt(),0,250);
-    Serial.println("DutyCyle controle a : "+messageTemp);}
+  StaticJsonDocument <256> doc;
+  deserializeJson(doc,message);
 
-  if ((String(topic) == String(OCPINTopic))){
-    if(String(messageTemp).toInt() != digitalRead(OCPIN)){
+  bool OCPINState = doc["OCPINState"];
+  bool BackFlowState = doc["BackFlowState"];
+  int PinSubState =  doc["PinSubstate"];
+  bool CCProtState = doc["CCProtState"];
+  bool IR2184State = doc["IR2184State"];
+  dutyCycle = doc["DutyCycleCTR"];
+  Serial.print("valeur PIN : ");Serial.println(PinSubState);
+
+  if (OCPINState != digitalRead(OCPIN)){
+    digitalWrite(OCPIN,!digitalRead(OCPIN));
     Serial.println("OCPIN toggle");
-    digitalWrite(OCPIN, !digitalRead(OCPIN));}}
-  
-  if ((String(topic) == String(BackFlowTopic))){
-    if(String(messageTemp).toInt() != digitalRead(backFlowPIN)){
-    Serial.println("backflowPIN toggle");
-    digitalWrite(backFlowPIN, !digitalRead(backFlowPIN));}}
+  }
+  if (BackFlowState != digitalRead(backFlowPIN)){
+    digitalWrite(backFlowPIN,!digitalRead(backFlowPIN));
+    Serial.println("backFlowPIN toggle");
+  }
+   if (PinSubState != digitalRead(PinSub)){
+    digitalWrite(PinSub,!digitalRead(PinSub));
+    Serial.println("PinSub toggle");
+  }
+  if (CCProtState != digitalRead(CCProtPin)){
+    digitalWrite(CCProtPin,!digitalRead(CCProtPin));
+    Serial.println("CCProtPin toggle");
+  }
+  if (IR2184State != digitalRead(PINSD)){
+    digitalWrite(PINSD,!digitalRead(PINSD));
+    Serial.println("IR2184 toggle");
+  }
 
-  if ((String(topic) == String(PinSubTopic))){
-    if(String(messageTemp).toInt() != digitalRead(PinSub)){
-      Serial.println("PinSub toggle");
-      digitalWrite(PinSub, !digitalRead(PinSub));}}
+ //if (String(topic) == String(DutyCycleCTRTopic)) {
+  //  dutyCycle = constrain(String(messageTemp).toInt(),0,250);
+  //  Serial.println("DutyCyle controle a : "+messageTemp);}
+
+  //if ((String(topic) == String(OCPINTopic))){
+   // if(String(messageTemp).toInt() != digitalRead(OCPIN)){
+   // Serial.println("OCPIN toggle");
+   // digitalWrite(OCPIN, !digitalRead(OCPIN));}}
   
-  if ((String(topic) == String(CCProtTopic))){
-    if(String(messageTemp).toInt() != digitalRead(CCProtPin)){
-      Serial.println("CCProtPin toggle");
-      digitalWrite(CCProtPin, !digitalRead(CCProtPin));}}
+ // if ((String(topic) == String(BackFlowTopic))){
+ //   if(String(messageTemp).toInt() != digitalRead(backFlowPIN)){
+ //   Serial.println("backflowPIN toggle");
+ //   digitalWrite(backFlowPIN, !digitalRead(backFlowPIN));}}
+
+  //if ((String(topic) == String(PinSubTopic))){
+  //  if(String(messageTemp).toInt() != digitalRead(PinSub)){
+  //    Serial.println("PinSub toggle");
+  //    digitalWrite(PinSub, !digitalRead(PinSub));}}
+  
+  //if ((String(topic) == String(CCProtTopic))){
+  //  if(String(messageTemp).toInt() != digitalRead(CCProtPin)){
+  //    Serial.println("CCProtPin toggle");
+  //    digitalWrite(CCProtPin, !digitalRead(CCProtPin));}}
 
       
-  if ((String(topic) == String(CCProtTopic))){
-    if(String(messageTemp).toInt() != digitalRead(PINSD)){
-      Serial.println("IR2184 shutdown toggle");
-      digitalWrite(PINSD, !digitalRead(PINSD));}}
+  //if ((String(topic) == String(CCProtTopic))){
+  //  if(String(messageTemp).toInt() != digitalRead(PINSD)){
+  //    Serial.println("IR2184 shutdown toggle");
+  //    digitalWrite(PINSD, !digitalRead(PINSD));}}
   
 }
 
 void setup() { 
  //Mise de la vitesse de transmission à 115200; 
-    Serial.begin(9600); 
+    Serial.begin(115200); 
  // Connecting to a Wi-Fi network 
     initWifi();
 
